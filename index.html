@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whiteout Survival - Battle Day Tactical Companion</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome 6 Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDKs (Compat version for zero-build GitHub Pages deployment) -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            dark: '#0B0F19',
+                            panel: '#131B2E',
+                            card: '#1A243B',
+                            accent: '#38BDF8',
+                            ice: '#7DD3FC',
+                            success: '#10B981',
+                            warning: '#F59E0B',
+                            danger: '#EF4444',
+                            border: '#1E293B'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar & pulse effects */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0B0F19; }
+        ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #38BDF8; }
+        .glow-cyan { box-shadow: 0 0 15px rgba(56, 189, 248, 0.2); }
+        .glow-red { box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
+    </style>
+</head>
+<body class="bg-brand-dark text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-sky-500 selection:text-slate-900">
+
+    <!-- TOP HEADER / ROOM COMMAND BAR -->
+    <header class="sticky top-0 z-50 bg-brand-panel/90 backdrop-blur-md border-b border-brand-border px-4 py-3 shadow-xl">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-3">
+            
+            <!-- Logo & Title -->
+            <div class="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
+                <div class="flex items-center gap-2.5">
+                    <div class="p-2.5 bg-gradient-to-tr from-sky-600 to-blue-600 rounded-xl shadow-lg shadow-sky-500/20 text-amber-300">
+                        <i class="fa-solid fa-snowflake text-xl animate-spin-slow"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="font-extrabold text-lg md:text-xl text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-sky-200 to-blue-400">
+                                WHITEOUT SURVIVAL
+                            </h1>
+                            <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-950 border border-sky-500/40 text-sky-300 font-mono font-bold">
+                                BATTLE DAY 2.5
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400">SvS & Sunfire Castle Alliance Live Command</p>
+                    </div>
+                </div>
+
+                <!-- Sound Toggle Mobile -->
+                <button id="soundToggleBtn" onclick="toggleAudio()" class="lg:hidden p-2 bg-brand-card hover:bg-slate-800 rounded-lg text-sky-400 border border-brand-border transition">
+                    <i id="soundIcon" class="fa-solid fa-volume-high"></i>
+                </button>
+            </div>
+
+            <!-- Room Selector & Sync Status -->
+            <div class="flex items-center flex-wrap gap-2.5 w-full lg:w-auto justify-end">
+                <!-- User Handle Input -->
+                <div class="flex items-center bg-brand-card border border-brand-border rounded-lg px-2.5 py-1 text-xs">
+                    <i class="fa-solid fa-user-gear text-slate-400 mr-2"></i>
+                    <input type="text" id="userHandleInput" placeholder="Callsign (e.g. [WOS] R4_John)" class="bg-transparent text-sky-300 font-semibold focus:outline-none w-36" onchange="updateUserHandle(this.value)">
+                </div>
+
+                <!-- Alliance/State Room Key -->
+                <div class="flex items-center bg-brand-card border border-brand-border rounded-lg px-2.5 py-1 text-xs">
+                    <i class="fa-solid fa-tower-broadcast text-sky-400 mr-2"></i>
+                    <span class="text-slate-400 mr-1">Room:</span>
+                    <input type="text" id="roomCodeInput" value="STATE-412" class="bg-transparent text-sky-300 font-mono font-bold focus:outline-none w-28 uppercase" onchange="switchRoom(this.value)">
+                </div>
+
+                <!-- Live Sync Badge -->
+                <div id="syncBadge" class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs font-medium">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="syncStatusText">Syncing Live</span>
+                </div>
+
+                <!-- Sound Toggle Desktop -->
+                <button onclick="toggleAudio()" class="hidden lg:flex p-2 bg-brand-card hover:bg-slate-800 rounded-lg text-sky-400 border border-brand-border transition" title="Toggle Sound Alerts">
+                    <i id="soundIconDesktop" class="fa-solid fa-volume-high"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="max-w-7xl mx-auto flex items-center gap-1 mt-3 overflow-x-auto pb-1 text-xs font-medium scrollbar-none">
+            <button onclick="switchTab('shields')" id="tab-shields" class="tab-btn px-4 py-2 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/50 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-shield-halved text-sky-400"></i> Shield Watcher 
+                <span id="shieldCountBadge" class="px-1.5 py-0.2 bg-red-500 text-white font-bold rounded-full text-[10px] hidden">0</span>
+            </button>
+            <button onclick="switchTab('intel')" id="tab-intel" class="tab-btn px-4 py-2 rounded-lg hover:bg-brand-card text-slate-400 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-comments text-amber-400"></i> Live Intel Comms & Chat
+            </button>
+            <button onclick="switchTab('castle')" id="tab-castle" class="tab-btn px-4 py-2 rounded-lg hover:bg-brand-card text-slate-400 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-chess-rook text-indigo-400"></i> Sunfire Castle & Queue
+            </button>
+            <button onclick="switchTab('sync')" id="tab-sync" class="tab-btn px-4 py-2 rounded-lg hover:bg-brand-card text-slate-400 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-stopwatch text-emerald-400"></i> Double Rally Sync
+            </button>
+            <button onclick="switchTab('coords')" id="tab-coords" class="tab-btn px-4 py-2 rounded-lg hover:bg-brand-card text-slate-400 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-crosshair text-red-400"></i> Target Radar
+            </button>
+            <button onclick="switchTab('skills')" id="tab-skills" class="tab-btn px-4 py-2 rounded-lg hover:bg-brand-card text-slate-400 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-bolt text-yellow-400"></i> Chief/Pet Skills
+            </button>
+            <button onclick="switchTab('calc')" id="tab-calc" class="tab-btn px-4 py-2 rounded-lg hover:bg-brand-card text-slate-400 flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-compass text-blue-400"></i> March Calc
+            </button>
+        </nav>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="max-w-7xl mx-auto p-4 md:p-6 space-y-6 flex-1 w-full">
+
+        <!-- 1. SHIELD WATCHER TAB -->
+        <section id="content-shields" class="tab-content space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Add Shield Panel -->
+                <div class="bg-brand-panel border border-brand-border rounded-2xl p-5 shadow-lg">
+                    <h2 class="font-bold text-sky-300 text-sm mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-plus-circle"></i> Track Enemy Shield / Bubble
+                    </h2>
+                    <form onsubmit="handleAddShield(event)" class="space-y-3">
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Target Name / Furnace</label>
+                            <input type="text" id="shName" required placeholder="e.g. Commander KOR_X" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-sky-500 focus:outline-none">
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="text-xs text-slate-400 block mb-1">Alliance</label>
+                                <input type="text" id="shAlliance" placeholder="KOR" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-sky-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-400 block mb-1">X Coord</label>
+                                <input type="number" id="shX" placeholder="540" required class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-sky-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-400 block mb-1">Y Coord</label>
+                                <input type="number" id="shY" placeholder="612" required class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-sky-500 focus:outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Duration & Presets</label>
+                            <div class="flex gap-1.5 mb-2">
+                                <button type="button" onclick="setShieldPreset(480)" class="px-2 py-1 bg-brand-card hover:bg-slate-700 text-[10px] text-sky-300 rounded border border-brand-border">8h</button>
+                                <button type="button" onclick="setShieldPreset(1440)" class="px-2 py-1 bg-brand-card hover:bg-slate-700 text-[10px] text-sky-300 rounded border border-brand-border">24h</button>
+                                <button type="button" onclick="setShieldPreset(15)" class="px-2 py-1 bg-brand-card hover:bg-slate-700 text-[10px] text-sky-300 rounded border border-brand-border">15m</button>
+                                <button type="button" onclick="setShieldPreset(5)" class="px-2 py-1 bg-brand-card hover:bg-slate-700 text-[10px] text-sky-300 rounded border border-brand-border">5m</button>
+                            </div>
+                            <input type="number" id="shMinutes" value="60" min="1" required class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-sky-500 focus:outline-none" placeholder="Minutes remaining">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Tactical Notes</label>
+                            <input type="text" id="shNotes" placeholder="e.g. High power Lancer heavy, zero on drop" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-sky-500 focus:outline-none">
+                        </div>
+                        <button type="submit" class="w-full py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs rounded-lg shadow-lg shadow-sky-600/20 transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-shield-halved"></i> Start Live Shield Tracking
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Active Shield List -->
+                <div class="lg:col-span-2 space-y-4">
+                    <div class="flex items-center justify-between bg-brand-panel p-3 rounded-xl border border-brand-border">
+                        <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                            <i class="fa-solid fa-radar text-sky-400"></i> Active Shield Watchlist
+                        </span>
+                        <div class="text-xs text-slate-400">Synced across all alliance officers</div>
+                    </div>
+
+                    <div id="shieldsList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Dynamic Cards Render Here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. LIVE INTEL COMMS & CHAT TAB -->
+        <section id="content-intel" class="tab-content hidden space-y-6">
+            <div class="bg-brand-panel border border-brand-border rounded-2xl p-5 shadow-lg">
+                <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-4 pb-3 border-b border-brand-border">
+                    <div>
+                        <h2 class="font-bold text-amber-300 text-base flex items-center gap-2">
+                            <i class="fa-solid fa-comments"></i> Alliance Battle Comms & Live Intel Feed
+                        </h2>
+                        <p class="text-xs text-slate-400">Post scout intel, rally calls, and target updates visible to all connected team members in real-time.</p>
+                    </div>
+                </div>
+
+                <!-- Chat Post Box -->
+                <form onsubmit="handlePostIntel(event)" class="mb-6 bg-brand-card p-3 rounded-xl border border-brand-border space-y-3">
+                    <div class="flex items-center gap-2">
+                        <select id="intelTag" class="bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-xs text-amber-300 font-semibold focus:outline-none">
+                            <option value="RALLY">⚡ RALLY CALL</option>
+                            <option value="URGENT">🚨 URGENT</option>
+                            <option value="CASTLE">🏰 CASTLE/TURRET</option>
+                            <option value="SCOUT">👁️ SCOUT REPORT</option>
+                            <option value="GENERAL">💬 GENERAL INTEL</option>
+                        </select>
+                        <input type="text" id="intelText" required placeholder="Type tactical message or coords callout..." class="flex-1 bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:border-sky-500 focus:outline-none">
+                        <button type="submit" class="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-paper-plane"></i> Post Intel
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Intel Messages List -->
+                <div id="intelMessagesList" class="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                    <!-- Dynamic Messages Render Here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. SUNFIRE CASTLE & ROTATING GARRISON QUEUE -->
+        <section id="content-castle" class="tab-content hidden space-y-6">
+            <!-- Castle Hold Status -->
+            <div class="bg-brand-panel border border-brand-border rounded-2xl p-6 shadow-lg">
+                <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+                    <div class="flex items-center gap-3">
+                        <div class="p-3 bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 rounded-xl">
+                            <i class="fa-solid fa-chess-rook text-2xl"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-100">Sunfire Castle Command & Rotation</h2>
+                            <p class="text-xs text-slate-400">Track Continuous Hold (2.5h target) & Captain Shifts</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-400">Current Occupier:</span>
+                        <input type="text" id="castleOccupier" value="[ICE] S123 Alliance" class="bg-brand-dark border border-brand-border rounded-lg px-3 py-1 text-xs text-sky-300 font-bold focus:outline-none" onchange="updateCastleOccupier(this.value)">
+                    </div>
+                </div>
+
+                <!-- Continuous Hold Progress Bar -->
+                <div class="bg-brand-dark p-4 rounded-xl border border-brand-border mb-6">
+                    <div class="flex justify-between items-center text-xs text-slate-300 mb-2">
+                        <span>Continuous Hold Progress (Target: 02h 30m)</span>
+                        <span id="castleHoldTimerText" class="font-mono text-sky-300 font-bold">00:00:00 / 02:30:00</span>
+                    </div>
+                    <div class="w-full bg-slate-900 h-3.5 rounded-full overflow-hidden border border-brand-border">
+                        <div id="castleProgressBar" class="bg-gradient-to-r from-sky-500 to-indigo-500 h-full w-0 transition-all duration-500"></div>
+                    </div>
+                </div>
+
+                <!-- Garrison Leader Queue -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Current Active Shift -->
+                    <div class="bg-brand-card p-5 rounded-xl border border-indigo-500/40">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-bold text-indigo-300 uppercase tracking-wider"><i class="fa-solid fa-crown text-amber-400 mr-1"></i> Active Garrison Captain</span>
+                            <button onclick="advanceGarrisonLeader()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition">
+                                <i class="fa-solid fa-rotate mr-1"></i> Next Shift
+                            </button>
+                        </div>
+                        <div id="activeCaptainCard" class="space-y-2">
+                            <div class="text-lg font-extrabold text-sky-300" id="capName">PolarVanguard</div>
+                            <div class="text-xs text-slate-400" id="capPower">Power: 145M | Shift Duration: 20 Mins</div>
+                            <div class="text-xs bg-brand-dark p-2.5 rounded-lg border border-brand-border text-slate-300" id="capTroops">
+                                Recommended Troop Mix: 60% Inf / 20% Lan / 20% Mar
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add Leader to Queue -->
+                    <div class="bg-brand-card p-5 rounded-xl border border-brand-border">
+                        <h3 class="text-xs font-bold text-slate-200 mb-3"><i class="fa-solid fa-user-plus text-sky-400 mr-1"></i> Add Leader to Garrison Queue</h3>
+                        <form onsubmit="handleAddLeader(event)" class="space-y-2.5">
+                            <input type="text" id="leadName" placeholder="Captain Handle (e.g. FrostBite99)" required class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none">
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" id="leadPower" placeholder="Power (e.g. 138M)" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none">
+                                <input type="text" id="leadTroops" placeholder="Troop ratio (e.g. 50/30/20)" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none">
+                            </div>
+                            <button type="submit" class="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 font-bold text-xs rounded-lg border border-brand-border transition">
+                                Add to Rotation List
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. DOUBLE RALLY SYNC -->
+        <section id="content-sync" class="tab-content hidden space-y-6">
+            <div class="bg-brand-panel border border-brand-border rounded-2xl p-6 shadow-lg max-w-3xl mx-auto">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="p-3 bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 rounded-xl">
+                        <i class="fa-solid fa-stopwatch text-2xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-100">Double Rally Departure Sync Tool</h2>
+                        <p class="text-xs text-slate-400">Calculate exact launch offsets so two simultaneous rallies strike Sunfire Castle at the exact same second.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="bg-brand-dark p-4 rounded-xl border border-brand-border">
+                        <label class="text-xs font-bold text-sky-300 block mb-1">Rally 1 March Duration (Seconds)</label>
+                        <input type="number" id="rally1Sec" value="45" oninput="calculateSync()" class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none">
+                    </div>
+                    <div class="bg-brand-dark p-4 rounded-xl border border-brand-border">
+                        <label class="text-xs font-bold text-emerald-300 block mb-1">Rally 2 March Duration (Seconds)</label>
+                        <input type="number" id="rally2Sec" value="62" oninput="calculateSync()" class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none">
+                    </div>
+                </div>
+
+                <div id="syncResultBox" class="p-5 bg-brand-card rounded-xl border border-emerald-500/40 text-xs space-y-2">
+                    <!-- Dynamic Offset Result -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. TARGET RADAR (COORDS) -->
+        <section id="content-coords" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Add Target -->
+                <div class="bg-brand-panel border border-brand-border rounded-2xl p-5 shadow-lg">
+                    <h2 class="font-bold text-red-400 text-sm mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-map-pin"></i> Bookmark Target Coordinates
+                    </h2>
+                    <form onsubmit="handleAddTarget(event)" class="space-y-3">
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Target Name</label>
+                            <input type="text" id="targetName" required placeholder="e.g. Turret North / Enemy HQ" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none">
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="text-xs text-slate-400 block mb-1">State #</label>
+                                <input type="text" id="targetState" value="412" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-400 block mb-1">X</label>
+                                <input type="number" id="targetX" placeholder="600" required class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-400 block mb-1">Y</label>
+                                <input type="number" id="targetY" placeholder="580" required class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Category</label>
+                            <select id="targetCategory" class="w-full bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none">
+                                <option value="Castle">Castle / Turret</option>
+                                <option value="Furnace">Furnace</option>
+                                <option value="Shield Dropped">Shield Dropped</option>
+                                <option value="Gatherer">Gatherer</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-lg shadow-lg transition">
+                            Save Target Coordinate
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Targets List -->
+                <div class="lg:col-span-2 space-y-4">
+                    <div id="targetsList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Dynamic Target Cards Render Here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. SKILLS COOLDOWNS -->
+        <section id="content-skills" class="tab-content hidden space-y-6">
+            <div id="skillsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Chief & Pet Skill Cards Render Here -->
+            </div>
+        </section>
+
+        <!-- 7. MARCH CALCULATOR -->
+        <section id="content-calc" class="tab-content hidden space-y-6">
+            <div class="bg-brand-panel border border-brand-border rounded-2xl p-6 shadow-lg max-w-2xl mx-auto">
+                <h2 class="text-base font-bold text-sky-300 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-compass"></i> Distance & March Speed Calculator
+                </h2>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="bg-brand-dark p-3 rounded-xl border border-brand-border">
+                        <span class="text-xs text-slate-400 block mb-2">From Coords (X1, Y1)</span>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="number" id="calcX1" value="500" oninput="runMarchCalc()" class="bg-brand-card p-2 text-xs rounded text-slate-200 border border-brand-border">
+                            <input type="number" id="calcY1" value="500" oninput="runMarchCalc()" class="bg-brand-card p-2 text-xs rounded text-slate-200 border border-brand-border">
+                        </div>
+                    </div>
+                    <div class="bg-brand-dark p-3 rounded-xl border border-brand-border">
+                        <span class="text-xs text-slate-400 block mb-2">To Coords (X2, Y2)</span>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="number" id="calcX2" value="600" oninput="runMarchCalc()" class="bg-brand-card p-2 text-xs rounded text-slate-200 border border-brand-border">
+                            <input type="number" id="calcY2" value="600" oninput="runMarchCalc()" class="bg-brand-card p-2 text-xs rounded text-slate-200 border border-brand-border">
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 bg-brand-dark rounded-xl border border-brand-border flex justify-between items-center text-xs">
+                    <div>Distance: <span id="calcDist" class="font-mono text-sky-300 font-bold">141.4 Tiles</span></div>
+                    <div>Est. March Duration: <span id="calcTime" class="font-mono text-emerald-400 font-bold">02:50</span></div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-brand-border bg-brand-panel p-4 text-center text-xs text-slate-500">
+        Whiteout Survival Battle Day Tactical Companion • Real-time Alliance Sync
+    </footer>
+
+    <!-- JAVASCRIPT APP LOGIC & FIRESTORE HANDLER -->
+    <script>
+        // --- APP STATE & LOCAL VARIABLES ---
+        let db = null;
+        let auth = null;
+        let activeRoom = 'STATE-412';
+        let userHandle = localStorage.getItem('wos_user_handle') || 'R4_Officer';
+        let soundEnabled = true;
+
+        // Data Models
+        let shieldsData = [];
+        let intelData = [];
+        let targetsData = [];
+        let castleData = { occupier: '[ICE] Alliance', holdStart: Date.now() };
+        let skillsData = [
+            { id: '1', name: 'Urgent Mobilization', cdMins: 720, lastUsed: null, desc: '+20% March Speed for 1h' },
+            { id: '2', name: 'Rush Order', cdMins: 1440, lastUsed: null, desc: 'Instant construction/speed boost' },
+            { id: '3', name: 'Health Care', cdMins: 720, lastUsed: null, desc: '-20% Healing Resource Cost' },
+            { id: '4', name: 'Pet Attack Buff', cdMins: 480, lastUsed: null, desc: '+15% Rally Attack Power' },
+            { id: '5', name: 'Pet March Speed', cdMins: 480, lastUsed: null, desc: '+30% March Speed' }
+        ];
+
+        // Web Audio Synthesizer Alert
+        function playAlertSound(type = 'pop') {
+            if (!soundEnabled) return;
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                if (type === 'pop') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(880, ctx.currentTime);
+                    osc.frequency.setValueAtTime(1174, ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.5);
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        function toggleAudio() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('soundIcon');
+            const iconD = document.getElementById('soundIconDesktop');
+            if (soundEnabled) {
+                if (icon) icon.className = 'fa-solid fa-volume-high';
+                if (iconD) iconD.className = 'fa-solid fa-volume-high';
+                playAlertSound('pop');
+            } else {
+                if (icon) icon.className = 'fa-solid fa-volume-xmark';
+                if (iconD) iconD.className = 'fa-solid fa-volume-xmark';
+            }
+        }
+
+        // --- TAB SWITCHER ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => {
+                el.classList.remove('bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/50');
+                el.classList.add('text-slate-400');
+            });
+            
+            const targetContent = document.getElementById(`content-${tabId}`);
+            const targetTab = document.getElementById(`tab-${tabId}`);
+            if (targetContent) targetContent.classList.remove('hidden');
+            if (targetTab) {
+                targetTab.classList.add('bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/50');
+                targetTab.classList.remove('text-slate-400');
+            }
+        }
+
+        // --- FIREBASE INITIALIZATION & ROOM LISTENERS ---
+        window.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('userHandleInput').value = userHandle;
+            
+            // Initialize Firebase using environment config or fallback
+            let firebaseConfig = {
+                apiKey: "AIzaSy_Placeholder_Key",
+                authDomain: "whiteout-battle-day.firebaseapp.com",
+                projectId: "whiteout-battle-day",
+                storageBucket: "whiteout-battle-day.appspot.com",
+                messagingSenderId: "123456789",
+                appId: "1:123456789:web:abcdef"
+            };
+
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                try { firebaseConfig = JSON.parse(__firebase_config); } catch(e){}
+            }
+
+            try {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                db = firebase.firestore();
+                auth = firebase.auth();
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await auth.signInWithCustomToken(__initial_auth_token);
+                } else {
+                    await auth.signInAnonymously();
+                }
+
+                updateSyncBadge(true, "Live Firestore Room");
+                subscribeToRoomData();
+            } catch(e) {
+                console.warn("Firebase running in offline sandbox mode:", e);
+                updateSyncBadge(false, "Offline / Local Mode");
+                loadLocalFallbackData();
+            }
+
+            // Start main clock ticker for countdowns
+            setInterval(tickClock, 1000);
+            calculateSync();
+            runMarchCalc();
+            renderSkills();
+        });
+
+        function updateSyncBadge(online, text) {
+            const badge = document.getElementById('syncBadge');
+            const txt = document.getElementById('syncStatusText');
+            if (online) {
+                badge.className = "flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs font-medium";
+            } else {
+                badge.className = "flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-400 text-xs font-medium";
+            }
+            if (txt) txt.textContent = text;
+        }
+
+        function switchRoom(newRoomKey) {
+            if (!newRoomKey) return;
+            activeRoom = newRoomKey.trim().toUpperCase();
+            if (db) subscribeToRoomData();
+        }
+
+        function updateUserHandle(val) {
+            userHandle = val || 'R4_Officer';
+            localStorage.setItem('wos_user_handle', userHandle);
+        }
+
+        // --- FIRESTORE REAL-TIME SUBSCRIPTION ---
+        let unsubscribeShields = null;
+        let unsubscribeIntel = null;
+        let unsubscribeTargets = null;
+
+        function subscribeToRoomData() {
+            if (!db) return;
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-wos-app';
+            const roomPath = `artifacts/${appId}/public/data/rooms/${activeRoom}`;
+
+            // Listen to Shields
+            if (unsubscribeShields) unsubscribeShields();
+            unsubscribeShields = db.collection(`${roomPath}/shields`).onSnapshot(snapshot => {
+                shieldsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderShields();
+            }, err => console.error(err));
+
+            // Listen to Intel Chat Feed
+            if (unsubscribeIntel) unsubscribeIntel();
+            unsubscribeIntel = db.collection(`${roomPath}/intel`).orderBy('timestamp', 'desc').limit(30).onSnapshot(snapshot => {
+                intelData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderIntel();
+            }, err => console.error(err));
+
+            // Listen to Targets Coords
+            if (unsubscribeTargets) unsubscribeTargets();
+            unsubscribeTargets = db.collection(`${roomPath}/targets`).onSnapshot(snapshot => {
+                targetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderTargets();
+            }, err => console.error(err));
+        }
+
+        // --- SHIELD WATCHER LOGIC ---
+        function handleAddShield(e) {
+            e.preventDefault();
+            const mins = parseInt(document.getElementById('shMinutes').value) || 60;
+            const newItem = {
+                name: document.getElementById('shName').value,
+                alliance: document.getElementById('shAlliance').value || 'ENEMY',
+                x: parseInt(document.getElementById('shX').value) || 0,
+                y: parseInt(document.getElementById('shY').value) || 0,
+                expireTime: Date.now() + mins * 60 * 1000,
+                notes: document.getElementById('shNotes').value,
+                addedBy: userHandle
+            };
+
+            if (db) {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-wos-app';
+                db.collection(`artifacts/${appId}/public/data/rooms/${activeRoom}/shields`).add(newItem);
+            } else {
+                shieldsData.unshift({ id: Date.now().toString(), ...newItem });
+                renderShields();
+            }
+
+            e.target.reset();
+        }
+
+        function setShieldPreset(mins) {
+            document.getElementById('shMinutes').value = mins;
+        }
+
+        function deleteShield(id) {
+            if (db) {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-wos-app';
+                db.collection(`artifacts/${appId}/public/data/rooms/${activeRoom}/shields`).doc(id).delete();
+            } else {
+                shieldsData = shieldsData.filter(s => s.id !== id);
+                renderShields();
+            }
+        }
+
+        function renderShields() {
+            const container = document.getElementById('shieldsList');
+            if (!container) return;
+
+            if (shieldsData.length === 0) {
+                container.innerHTML = `<div class="col-span-2 text-center py-8 bg-brand-panel rounded-xl border border-dashed border-brand-border text-slate-500 text-xs">No active shield timers tracked right now.</div>`;
+                return;
+            }
+
+            container.innerHTML = shieldsData.map(s => {
+                const remMs = s.expireTime - Date.now();
+                const isPopped = remMs <= 0;
+                const isWarning = remMs > 0 && remMs <= 5 * 60 * 1000;
+
+                return `
+                    <div class="p-4 rounded-xl border ${isPopped ? 'bg-red-950/30 border-red-500/80 animate-pulse' : isWarning ? 'bg-amber-950/30 border-amber-500/60' : 'bg-brand-panel border-brand-border'} shadow-md">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="font-bold text-sm text-slate-100">${s.name}</span>
+                                ${s.alliance ? `<span class="ml-1.5 text-[10px] px-1.5 py-0.5 bg-brand-dark border border-brand-border text-sky-300 font-mono rounded">[${s.alliance}]</span>` : ''}
+                            </div>
+                            <button onclick="deleteShield('${s.id}')" class="text-slate-500 hover:text-red-400 text-xs">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="text-xs text-sky-400 font-mono mb-2 flex items-center justify-between">
+                            <span>X: ${s.x} | Y: ${s.y}</span>
+                            <button onclick="copyToClipboard('X:${s.x} Y:${s.y}')" class="text-[10px] text-slate-400 hover:text-sky-300 underline"><i class="fa-solid fa-copy"></i> Copy</button>
+                        </div>
+                        <div class="p-2.5 bg-brand-dark rounded-lg border border-brand-border flex justify-between items-center mb-2">
+                            <span class="text-[11px] text-slate-400">Shield Left:</span>
+                            <span class="font-mono font-bold text-base ${isPopped ? 'text-red-400' : isWarning ? 'text-amber-400' : 'text-sky-300'}">
+                                ${isPopped ? '00:00:00 - POPPED!' : formatMs(remMs)}
+                            </span>
+                        </div>
+                        ${s.notes ? `<div class="text-[11px] text-slate-400 italic mb-1">"${s.notes}"</div>` : ''}
+                        <div class="text-[10px] text-slate-500 text-right">Added by: ${s.addedBy || 'Officer'}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- INTEL CHAT FEED LOGIC ---
+        function handlePostIntel(e) {
+            e.preventDefault();
+            const tag = document.getElementById('intelTag').value;
+            const text = document.getElementById('intelText').value;
+            if (!text) return;
+
+            const msg = {
+                tag,
+                text,
+                sender: userHandle,
+                timestamp: Date.now()
+            };
+
+            if (db) {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-wos-app';
+                db.collection(`artifacts/${appId}/public/data/rooms/${activeRoom}/intel`).add(msg);
+            } else {
+                intelData.unshift({ id: Date.now().toString(), ...msg });
+                renderIntel();
+            }
+
+            document.getElementById('intelText').value = '';
+        }
+
+        function renderIntel() {
+            const container = document.getElementById('intelMessagesList');
+            if (!container) return;
+
+            if (intelData.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">No tactical messages posted yet. Be the first!</div>`;
+                return;
+            }
+
+            container.innerHTML = intelData.map(m => {
+                const timeStr = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return `
+                    <div class="p-3 bg-brand-dark rounded-xl border border-brand-border flex flex-col gap-1">
+                        <div class="flex items-center justify-between text-[11px]">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-amber-300">${m.sender}</span>
+                                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">${m.tag}</span>
+                            </div>
+                            <span class="text-slate-500">${timeStr}</span>
+                        </div>
+                        <p class="text-xs text-slate-200 mt-1">${m.text}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- TARGET RADAR LOGIC ---
+        function handleAddTarget(e) {
+            e.preventDefault();
+            const newItem = {
+                name: document.getElementById('targetName').value,
+                stateNum: document.getElementById('targetState').value || '412',
+                x: parseInt(document.getElementById('targetX').value) || 0,
+                y: parseInt(document.getElementById('targetY').value) || 0,
+                category: document.getElementById('targetCategory').value
+            };
+
+            if (db) {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-wos-app';
+                db.collection(`artifacts/${appId}/public/data/rooms/${activeRoom}/targets`).add(newItem);
+            } else {
+                targetsData.unshift({ id: Date.now().toString(), ...newItem });
+                renderTargets();
+            }
+
+            e.target.reset();
+        }
+
+        function renderTargets() {
+            const container = document.getElementById('targetsList');
+            if (!container) return;
+
+            if (targetsData.length === 0) {
+                container.innerHTML = `<div class="col-span-2 text-center py-6 text-slate-500 text-xs">No target coordinates saved.</div>`;
+                return;
+            }
+
+            container.innerHTML = targetsData.map(t => `
+                <div class="p-4 bg-brand-panel border border-brand-border rounded-xl flex justify-between items-center">
+                    <div>
+                        <div class="font-bold text-xs text-slate-100 mb-1">${t.name}</div>
+                        <div class="text-xs text-sky-400 font-mono">State #${t.stateNum} | X:${t.x} Y:${t.y}</div>
+                    </div>
+                    <button onclick="copyToClipboard('#${t.stateNum} X:${t.x} Y:${t.y} [${t.name}]')" class="px-3 py-1.5 bg-brand-dark hover:bg-slate-800 border border-brand-border rounded-lg text-xs text-sky-300 transition flex items-center gap-1">
+                        <i class="fa-solid fa-copy"></i> Copy
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // --- SKILLS & CALC HELPER LOGIC ---
+        function renderSkills() {
+            const container = document.getElementById('skillsGrid');
+            if (!container) return;
+
+            container.innerHTML = skillsData.map(s => {
+                const isCooling = s.lastUsed && (Date.now() - s.lastUsed < s.cdMins * 60 * 1000);
+                const remMs = isCooling ? (s.cdMins * 60 * 1000) - (Date.now() - s.lastUsed) : 0;
+
+                return `
+                    <div class="p-4 bg-brand-panel border border-brand-border rounded-xl flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="font-bold text-sm text-slate-200">${s.name}</h3>
+                                <span class="text-[10px] px-2 py-0.5 rounded bg-yellow-500/10 text-yellow-400 font-semibold border border-yellow-500/30">Skill</span>
+                            </div>
+                            <p class="text-xs text-slate-400 mb-3">${s.desc}</p>
+                            <div class="p-2 bg-brand-dark rounded-lg text-center font-mono text-sm font-bold ${isCooling ? 'text-amber-400' : 'text-emerald-400'} mb-3">
+                                ${isCooling ? formatMs(remMs) : 'READY TO USE'}
+                            </div>
+                        </div>
+                        <button onclick="useSkill('${s.id}')" class="w-full py-1.5 ${isCooling ? 'bg-slate-800 text-slate-500' : 'bg-sky-600 hover:bg-sky-500 text-white'} font-bold text-xs rounded-lg transition">
+                            ${isCooling ? 'Reset Skill' : 'Activate Skill'}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function useSkill(id) {
+            skillsData = skillsData.map(s => {
+                if (s.id === id) {
+                    const isCooling = s.lastUsed && (Date.now() - s.lastUsed < s.cdMins * 60 * 1000);
+                    return { ...s, lastUsed: isCooling ? null : Date.now() };
+                }
+                return s;
+            });
+            renderSkills();
+        }
+
+        function calculateSync() {
+            const r1 = parseInt(document.getElementById('rally1Sec').value) || 0;
+            const r2 = parseInt(document.getElementById('rally2Sec').value) || 0;
+            const offset = Math.abs(r1 - r2);
+            const lead = r1 > r2 ? 'Rally 1' : 'Rally 2';
+            const follow = r1 > r2 ? 'Rally 2' : 'Rally 1';
+
+            document.getElementById('syncResultBox').innerHTML = `
+                <div class="font-bold text-slate-200 text-sm mb-1">Impact Offset: <span class="text-emerald-400 font-mono">${offset} Seconds</span></div>
+                <p class="text-slate-300">1. Launch <strong class="text-amber-400">${lead}</strong> first.</p>
+                <p class="text-slate-300">2. Launch <strong class="text-emerald-400">${follow}</strong> exactly <span class="text-sky-300 font-bold underline">${offset}s</span> after ${lead} marches.</p>
+            `;
+        }
+
+        function runMarchCalc() {
+            const x1 = parseInt(document.getElementById('calcX1').value) || 0;
+            const y1 = parseInt(document.getElementById('calcY1').value) || 0;
+            const x2 = parseInt(document.getElementById('calcX2').value) || 0;
+            const y2 = parseInt(document.getElementById('calcY2').value) || 0;
+
+            const dist = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+            const secs = Math.round(dist * 1.2);
+
+            document.getElementById('calcDist').textContent = `${dist.toFixed(1)} Tiles`;
+            document.getElementById('calcTime').textContent = formatMs(secs * 1000).substring(3);
+        }
+
+        function copyToClipboard(txt) {
+            navigator.clipboard.writeText(txt);
+            alert(`Copied to clipboard:\n${txt}`);
+        }
+
+        function formatMs(ms) {
+            if (ms <= 0) return '00:00:00';
+            const totalSec = Math.floor(ms / 1000);
+            const h = Math.floor(totalSec / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = totalSec % 60;
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function tickClock() {
+            renderShields();
+            renderSkills();
+        }
+
+        function loadLocalFallbackData() {
+            shieldsData = [
+                { id: '1', name: 'Hostile R4 Base', alliance: 'KOR', x: 540, y: 612, expireTime: Date.now() + 12 * 60 * 1000, notes: 'Zero on drop', addedBy: 'R4_Leader' }
+            ];
+            intelData = [
+                { id: '1', tag: 'URGENT', text: 'Turret North shield dropping in 10 mins. Prepare infantry rallies!', sender: 'R5_Commander', timestamp: Date.now() - 100000 }
+            ];
+            targetsData = [
+                { id: '1', name: 'Sunfire Castle', stateNum: '412', x: 600, y: 600, category: 'Castle' }
+            ];
+            renderShields();
+            renderIntel();
+            renderTargets();
+        }
+    </script>
+</body>
+</html>
+
