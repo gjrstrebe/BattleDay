@@ -506,14 +506,17 @@
             document.getElementById('userHandleInput').value = userHandle;
             
             // Initialize Firebase using environment config or fallback
-            let firebaseConfig = {
-                apiKey: "AIzaSy_Placeholder_Key",
-                authDomain: "whiteout-battle-day.firebaseapp.com",
-                projectId: "whiteout-battle-day",
-                storageBucket: "whiteout-battle-day.appspot.com",
-                messagingSenderId: "123456789",
-                appId: "1:123456789:web:abcdef"
-            };
+            let myFirebaseConfig = {
+  apiKey: "AIzaSyDQuzprhL2M3hrR585iyHeLr0BtUTMfCxA",
+  authDomain: "svs-scheduler-a1919.firebaseapp.com",
+  databaseURL: "https://svs-scheduler-a1919-default-rtdb.firebaseio.com",
+  projectId: "svs-scheduler-a1919",
+  storageBucket: "svs-scheduler-a1919.firebasestorage.app",
+  messagingSenderId: "1070850863206",
+  appId: "1:1070850863206:web:a2de4c38691fd0c89ebda7",
+  measurementId: "G-W0DFYH7M9Q"
+};
+
 
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 try { firebaseConfig = JSON.parse(__firebase_config); } catch(e){}
